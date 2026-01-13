@@ -72,3 +72,41 @@ export interface ParsedFeed {
   title: string;
   items: ParsedFeedItem[];
 }
+
+/**
+ * Check if a feed item is sponsored content.
+ * Matches any variation of "sponsor" (sponsor, sponsored, sponsoring, etc.)
+ * in title, summary, content, or tags - case insensitive.
+ */
+export function isSponsored(item: ParsedFeedItem | Entry | EntryWithFeed): boolean {
+  // Pattern matches: sponsor, sponsored, sponsoring, sponsors, [sponsor], etc.
+  const sponsorPattern = /sponsor/i;
+  
+  const fieldsToCheck = [
+    item.title,
+    item.summary,
+    item.content,
+  ];
+  
+  // Check text fields
+  for (const field of fieldsToCheck) {
+    if (field && sponsorPattern.test(field)) {
+      return true;
+    }
+  }
+  
+  // Check tags (handle both array and JSON string formats)
+  if (item.tags) {
+    const tagsArray = Array.isArray(item.tags) 
+      ? item.tags 
+      : (() => { try { return JSON.parse(item.tags as string); } catch { return []; } })();
+    
+    for (const tag of tagsArray) {
+      if (typeof tag === 'string' && sponsorPattern.test(tag)) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}

@@ -1,5 +1,5 @@
 // RSS/Atom Feed Generator
-import { Env, EntryWithFeed } from './types';
+import { Env, EntryWithFeed, isSponsored } from './types';
 
 // SVG logo as data URI (orange RSS icon)
 const FEED_LOGO_SVG = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="8" fill="#ff6600"/><circle cx="16" cy="48" r="6" fill="#fff"/><path d="M16 24c13.255 0 24 10.745 24 24h8c0-17.673-14.327-32-32-32v8z" fill="#fff"/><path d="M16 8c22.091 0 40 17.909 40 40h8C64 21.49 42.51 0 16 0v8z" fill="#fff"/></svg>`)}`;
@@ -48,17 +48,22 @@ export async function generateFeed(
   const requestedLimit = itemsPerFeed * config.maxRank;
   const actualLimit = Math.min(requestedLimit, MAX_ENTRIES);
   
-  // Get recent entries from ranked feeds
+  // Get recent entries from ranked feeds, excluding sponsored content at SQL level
   const entries = await env.DB.prepare(`
     SELECT e.*, f.name as feed_name, f.rank as feed_rank
     FROM entries e
     JOIN feeds f ON e.feed_id = f.id
     WHERE f.rank IS NOT NULL AND f.rank <= ?
+      AND e.title NOT LIKE '%sponsor%'
+      AND e.title NOT LIKE '%SPONSOR%'
+      AND e.title NOT LIKE '%Sponsor%'
+      AND (e.summary IS NULL OR (e.summary NOT LIKE '%sponsor%' AND e.summary NOT LIKE '%SPONSOR%' AND e.summary NOT LIKE '%Sponsor%'))
     ORDER BY e.published DESC NULLS LAST
     LIMIT ?
   `).bind(config.maxRank, actualLimit).all<EntryWithFeed>();
   
-  const items = entries.results || [];
+  // Additional filter as second defense layer (catches content field and tags)
+  const items = (entries.results || []).filter(item => !isSponsored(item));
   
   // Get the newest entry's published date for Last-Modified header
   const newestDate = items.length > 0 && items[0].published 
