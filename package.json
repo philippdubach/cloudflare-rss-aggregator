@@ -1,0 +1,31 @@
+{
+  "name": "rss-aggregator",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers RSS feed aggregator for top tech blogs",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "db:create": "wrangler d1 create rss-aggregator-db",
+    "db:migrate": "wrangler d1 execute rss-aggregator-db --file=./schema.sql",
+    "db:migrate:local": "wrangler d1 execute rss-aggregator-db --local --file=./schema.sql",
+    "db:import": "python3 scripts/generate-import.py > scripts/import.sql && wrangler d1 execute rss-aggregator-db --file=./scripts/import.sql",
+    "db:import:local": "python3 scripts/generate-import.py > scripts/import.sql && wrangler d1 execute rss-aggregator-db --local --file=./scripts/import.sql",
+    "kv:create": "wrangler kv:namespace create CACHE",
+    "queue:create": "wrangler queues create feed-fetch-queue",
+    "r2:create": "wrangler r2 bucket create rss-feeds",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["rss", "cloudflare", "workers", "aggregator"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260113.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.58.0"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.3.3"
+  }
+}
