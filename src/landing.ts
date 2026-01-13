@@ -7,16 +7,78 @@ export async function generateLandingPage(env: Env): Promise<string> {
   const entryCount = await env.DB.prepare('SELECT COUNT(*) as count FROM entries').first<{count: number}>();
   const lastUpdate = await env.DB.prepare('SELECT MAX(last_fetched) as last_fetched FROM feeds WHERE rank IS NOT NULL').first<{last_fetched: string | null}>();
 
+  const baseUrl = env.BASE_URL;
+  
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Most Popular HN Personal Blogs RSS</title>
-  <meta name="description" content="Combined RSS feeds from the most popular Hacker News personal blogs">
-  <link rel="alternate" type="application/atom+xml" title="Top 100" href="/top100.xml">
-  <link rel="alternate" type="application/atom+xml" title="Top 50" href="/top50.xml">
-  <link rel="alternate" type="application/atom+xml" title="Top 25" href="/top25.xml">
+  <title>Top Hacker News Personal Blogs 2025 — Combined RSS Feed</title>
+  <meta name="description" content="Subscribe to one RSS feed for all ${feedCount?.count || 100} top-ranked Hacker News personal blogs. Curated from the 2025 HN Popularity rankings. Updated every 15 minutes.">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="Top Hacker News Personal Blogs 2025 — Combined RSS Feed">
+  <meta property="og:description" content="One RSS feed for the ${feedCount?.count || 100} most popular personal blogs on Hacker News. Updated every 15 minutes.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${baseUrl}/">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Top Hacker News Personal Blogs 2025 — Combined RSS Feed">
+  <meta name="twitter:description" content="One RSS feed for the ${feedCount?.count || 100} most popular personal blogs on Hacker News.">
+  
+  <!-- Canonical -->
+  <link rel="canonical" href="${baseUrl}/">
+  
+  <!-- RSS/Atom discovery -->
+  <link rel="alternate" type="application/atom+xml" title="Top 100 HN Blogs (Atom)" href="/top100.atom">
+  <link rel="alternate" type="application/atom+xml" title="Top 50 HN Blogs (Atom)" href="/top50.atom">
+  <link rel="alternate" type="application/atom+xml" title="Top 25 HN Blogs (Atom)" href="/top25.atom">
+  <link rel="alternate" type="application/rss+xml" title="Top 100 HN Blogs (RSS)" href="/top100.rss">
+  <link rel="alternate" type="application/rss+xml" title="Top 50 HN Blogs (RSS)" href="/top50.rss">
+  <link rel="alternate" type="application/rss+xml" title="Top 25 HN Blogs (RSS)" href="/top25.rss">
+  
+  <!-- JSON-LD Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "DataFeed",
+    "name": "Top Hacker News Personal Blogs RSS Feed",
+    "description": "Aggregated RSS feed combining posts from the most popular personal blogs ranked by Hacker News performance in 2025",
+    "url": "${baseUrl}/",
+    "provider": {
+      "@type": "Person",
+      "name": "Philipp Dubach",
+      "url": "https://philippdubach.com"
+    },
+    "dateModified": "${lastUpdate?.last_fetched || new Date().toISOString()}",
+    "dataFeedElement": [
+      {
+        "@type": "DataFeedItem",
+        "name": "Top 25 HN Personal Blogs",
+        "url": "${baseUrl}/top25.xml"
+      },
+      {
+        "@type": "DataFeedItem",
+        "name": "Top 50 HN Personal Blogs", 
+        "url": "${baseUrl}/top50.xml"
+      },
+      {
+        "@type": "DataFeedItem",
+        "name": "Top 100 HN Personal Blogs",
+        "url": "${baseUrl}/top100.xml"
+      }
+    ],
+    "about": {
+      "@type": "Thing",
+      "name": "Hacker News",
+      "url": "https://news.ycombinator.com",
+      "sameAs": "https://en.wikipedia.org/wiki/Hacker_News"
+    }
+  }
+  </script>
+  
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -30,14 +92,14 @@ export async function generateLandingPage(env: Env): Promise<string> {
     h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
     p.sub { color: #666; margin-bottom: 2rem; }
     h2 { font-size: 1.1rem; margin: 2rem 0 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; }
+    h3.feed-name { font-size: 1rem; font-weight: 500; margin: 0; }
     ul { list-style: none; }
     li { margin-bottom: 0.5rem; }
     a { color: #0066cc; text-decoration: none; }
     a:hover { text-decoration: underline; }
     .feeds { display: flex; flex-direction: column; gap: 0.75rem; }
     .feed { display: flex; justify-content: space-between; align-items: center; }
-    .feed-name { font-weight: 500; }
-    .feed-links { display: flex; gap: 0.75rem; font-size: 0.9rem; }
+    .feed-links { display: flex; gap: 0.75rem; font-size: 0.9rem; margin: 0; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color: #666; font-size: 0.85rem; }
     footer p { margin-bottom: 0.5rem; }
     .stats { color: #666; font-size: 0.9rem; margin-bottom: 0.25rem; }
@@ -51,36 +113,43 @@ export async function generateLandingPage(env: Env): Promise<string> {
   </style>
 </head>
 <body>
-  <h1>Most Popular HN Personal Blogs RSS</h1>
-  <p class="sub">Combined feeds from the most popular personal blogs ranked by Hacker News performance</p>
+  <header>
+    <h1>Top Hacker News Personal Blogs — RSS Feed</h1>
+    <p class="sub">One feed for the most popular personal blogs, ranked by <a href="https://news.ycombinator.com" class="hidden">Hacker News</a> performance</p>
+  </header>
+  
+  <main>
   
   <p class="stats">${feedCount?.count || 0} blogs* • ${entryCount?.count?.toLocaleString() || 0} articles • Updated every 15 min (last: <span id="lastUpdate"></span>)</p>
   <p class="note">*Inactive websites automatically removed. Newsletters added via <a href="https://kill-the-newsletter.com" class="hidden">kill-the-newsletter.com</a> (by <a href="https://leafac.com" class="hidden">Leandro Facchinetti</a>). For changes and corrections <a href="mailto:rss-aggregator@pdub.click" class="hidden">email me</a>.</p>
   
-  <h2>Subscribe</h2>
-  <div class="feeds">
-    <div class="feed">
-      <span class="feed-name">Most Popular 25 HN Personal Blogs</span>
-      <span class="feed-links">
-        <a href="/top25.xml">Atom</a>
-        <a href="/top25.rss">RSS</a>
-      </span>
+  <section aria-labelledby="subscribe-heading">
+    <h2 id="subscribe-heading">Subscribe</h2>
+    <div class="feeds">
+      <article class="feed">
+        <h3 class="feed-name">Top 25 Hacker News Personal Blogs</h3>
+        <p class="feed-links">
+          <a href="/top25.xml">Atom</a>
+          <a href="/top25.rss">RSS</a>
+        </p>
+      </article>
+      <article class="feed">
+        <h3 class="feed-name">Top 50 Hacker News Personal Blogs</h3>
+        <p class="feed-links">
+          <a href="/top50.xml">Atom</a>
+          <a href="/top50.rss">RSS</a>
+        </p>
+      </article>
+      <article class="feed">
+        <h3 class="feed-name">Top 100 Hacker News Personal Blogs</h3>
+        <p class="feed-links">
+          <a href="/top100.xml">Atom</a>
+          <a href="/top100.rss">RSS</a>
+        </p>
+      </article>
     </div>
-    <div class="feed">
-      <span class="feed-name">Most Popular 50 HN Personal Blogs</span>
-      <span class="feed-links">
-        <a href="/top50.xml">Atom</a>
-        <a href="/top50.rss">RSS</a>
-      </span>
-    </div>
-    <div class="feed">
-      <span class="feed-name">Most Popular 100 HN Personal Blogs</span>
-      <span class="feed-links">
-        <a href="/top100.xml">Atom</a>
-        <a href="/top100.rss">RSS</a>
-      </span>
-    </div>
-  </div>
+  </section>
+  </main>
   
   <footer>
     <p>Rankings from the <a href="https://refactoringenglish.com/tools/hn-popularity/?start=2025-01-01&end=2025-12-31" class="hidden">2025 HN Popularity Contest</a> by <a href="https://refactoringenglish.com/" class="hidden">Refactoring English</a>. Blogs ranked by aggregate Hacker News score (submissions with 20+ points).</p>

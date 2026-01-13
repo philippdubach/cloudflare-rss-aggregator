@@ -1,7 +1,7 @@
 // Main Worker Entry Point
 import { Env, FeedFetchMessage } from './types';
 import { fetchFeed, queueAllFeeds, pruneOldEntries } from './fetcher';
-import { generateFeed } from './generator';
+import { generateFeed, GeneratedFeed } from './generator';
 import { generateLandingPage } from './landing';
 
 // Security headers for all responses
@@ -79,37 +79,43 @@ export default {
         }));
       }
 
-      // Atom feeds
-      if (path === '/top100.xml') {
+      // Atom feeds (.xml and .atom routes)
+      if (path === '/top100.xml' || path === '/top100.atom') {
         ctx.waitUntil(trackSubscriber(env, path, request));
-        const feed = await generateFeed(env, 'top100', 'atom');
+        const baseUrl = new URL(request.url).origin;
+        const feed = await generateFeed(env, 'top100', 'atom', baseUrl);
         return feedResponse(feed, 'atom');
       }
-      if (path === '/top50.xml') {
+      if (path === '/top50.xml' || path === '/top50.atom') {
         ctx.waitUntil(trackSubscriber(env, path, request));
-        const feed = await generateFeed(env, 'top50', 'atom');
+        const baseUrl = new URL(request.url).origin;
+        const feed = await generateFeed(env, 'top50', 'atom', baseUrl);
         return feedResponse(feed, 'atom');
       }
-      if (path === '/top25.xml') {
+      if (path === '/top25.xml' || path === '/top25.atom') {
         ctx.waitUntil(trackSubscriber(env, path, request));
-        const feed = await generateFeed(env, 'top25', 'atom');
+        const baseUrl = new URL(request.url).origin;
+        const feed = await generateFeed(env, 'top25', 'atom', baseUrl);
         return feedResponse(feed, 'atom');
       }
 
       // RSS feeds
       if (path === '/top100.rss') {
         ctx.waitUntil(trackSubscriber(env, path, request));
-        const feed = await generateFeed(env, 'top100', 'rss');
+        const baseUrl = new URL(request.url).origin;
+        const feed = await generateFeed(env, 'top100', 'rss', baseUrl);
         return feedResponse(feed, 'rss');
       }
       if (path === '/top50.rss') {
         ctx.waitUntil(trackSubscriber(env, path, request));
-        const feed = await generateFeed(env, 'top50', 'rss');
+        const baseUrl = new URL(request.url).origin;
+        const feed = await generateFeed(env, 'top50', 'rss', baseUrl);
         return feedResponse(feed, 'rss');
       }
       if (path === '/top25.rss') {
         ctx.waitUntil(trackSubscriber(env, path, request));
-        const feed = await generateFeed(env, 'top25', 'rss');
+        const baseUrl = new URL(request.url).origin;
+        const feed = await generateFeed(env, 'top25', 'rss', baseUrl);
         return feedResponse(feed, 'rss');
       }
 
@@ -195,18 +201,34 @@ export default {
   },
 };
 
-function feedResponse(content: string, format: 'atom' | 'rss'): Response {
-  const contentType = format === 'atom' 
-    ? 'application/atom+xml; charset=utf-8'
-    : 'application/rss+xml; charset=utf-8';
+// Generate ETag from content hash
+async function generateETag(content: string): Promise<string> {
+  const data = new TextEncoder().encode(content);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return `"${hashArray.slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join('')}"`;
+}
+
+async function feedResponse(feed: GeneratedFeed, format: 'atom' | 'rss'): Promise<Response> {
+  // Use text/xml for browser XSL styling compatibility (per rss.style requirements)
+  const contentType = 'text/xml; charset=utf-8';
   
-  return addSecurityHeaders(new Response(content, {
-    headers: {
-      'Content-Type': contentType,
-      'Cache-Control': 'public, max-age=900', // 15 min cache
-      'Access-Control-Allow-Origin': '*',
-    },
-  }));
+  // Generate ETag from content
+  const etag = await generateETag(feed.content);
+  
+  const headers: HeadersInit = {
+    'Content-Type': contentType,
+    'Cache-Control': 'public, max-age=900', // 15 min cache
+    'Access-Control-Allow-Origin': '*',
+    'ETag': etag,
+  };
+  
+  // Add Last-Modified if we have a newest entry date
+  if (feed.lastModified) {
+    headers['Last-Modified'] = new Date(feed.lastModified).toUTCString();
+  }
+  
+  return addSecurityHeaders(new Response(feed.content, { headers }));
 }
 
 async function handleStats(env: Env): Promise<Response> {

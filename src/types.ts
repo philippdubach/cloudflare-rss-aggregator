@@ -7,6 +7,7 @@ export interface Env {
   FEEDS_BUCKET: R2Bucket;
   ITEMS_PER_FEED: string;
   RETENTION_DAYS: string;
+  BASE_URL: string;  // Base URL for feed self-links
   ADMIN_TOKEN?: string;  // Secret for API auth
 }
 

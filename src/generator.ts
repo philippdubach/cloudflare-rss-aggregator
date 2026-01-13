@@ -1,13 +1,13 @@
 // RSS/Atom Feed Generator
 import { Env, EntryWithFeed } from './types';
 
-const FEED_BASE_URL = 'https://rss-aggregator.pages.dev'; // Update after deployment
+// SVG logo as data URI (orange RSS icon)
+const FEED_LOGO_SVG = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="8" fill="#ff6600"/><circle cx="16" cy="48" r="6" fill="#fff"/><path d="M16 24c13.255 0 24 10.745 24 24h8c0-17.673-14.327-32-32-32v8z" fill="#fff"/><path d="M16 8c22.091 0 40 17.909 40 40h8C64 21.49 42.51 0 16 0v8z" fill="#fff"/></svg>`)}`;
 
 interface FeedConfig {
   title: string;
   description: string;
   maxRank: number;
-  path: string;
 }
 
 const FEED_CONFIGS: Record<string, FeedConfig> = {
@@ -15,28 +15,32 @@ const FEED_CONFIGS: Record<string, FeedConfig> = {
     title: 'Top 100 Hacker News Personal Blogs',
     description: 'Aggregated feed from the top 100 personal blogs ranked by Hacker News performance',
     maxRank: 100,
-    path: '/top100.xml',
   },
   top50: {
     title: 'Top 50 Hacker News Personal Blogs',
     description: 'Aggregated feed from the top 50 personal blogs ranked by Hacker News performance',
     maxRank: 50,
-    path: '/top50.xml',
   },
   top25: {
     title: 'Top 25 Hacker News Personal Blogs',
     description: 'Aggregated feed from the top 25 personal blogs ranked by Hacker News performance',
     maxRank: 25,
-    path: '/top25.xml',
   },
 };
+
+export interface GeneratedFeed {
+  content: string;
+  lastModified: string | null;  // ISO date string from newest entry
+}
 
 export async function generateFeed(
   env: Env,
   feedType: 'top100' | 'top50' | 'top25',
-  format: 'atom' | 'rss' = 'atom'
-): Promise<string> {
+  format: 'atom' | 'rss' = 'atom',
+  baseUrl?: string
+): Promise<GeneratedFeed> {
   const config = FEED_CONFIGS[feedType];
+  const feedBaseUrl = baseUrl || env.BASE_URL;
   const itemsPerFeed = parseInt(env.ITEMS_PER_FEED) || 50;
   
   // Hard cap to prevent unbounded queries (max 500 entries)
@@ -56,15 +60,26 @@ export async function generateFeed(
   
   const items = entries.results || [];
   
-  if (format === 'rss') {
-    return generateRSS(config, items);
-  }
-  return generateAtom(config, items);
+  // Get the newest entry's published date for Last-Modified header
+  const newestDate = items.length > 0 && items[0].published 
+    ? items[0].published 
+    : null;
+  
+  const content = format === 'rss'
+    ? generateRSS(config, items, feedBaseUrl, feedType)
+    : generateAtom(config, items, feedBaseUrl, feedType);
+  
+  return { content, lastModified: newestDate };
 }
 
-function generateAtom(config: FeedConfig, items: EntryWithFeed[]): string {
+function generateAtom(
+  config: FeedConfig, 
+  items: EntryWithFeed[], 
+  baseUrl: string,
+  feedType: string
+): string {
   const now = new Date().toISOString();
-  const feedUrl = `${FEED_BASE_URL}${config.path}`;
+  const feedUrl = `${baseUrl}/${feedType}.atom`;
   
   const entriesXml = items.map(item => {
     const published = item.published || item.created_at;
@@ -101,22 +116,33 @@ ${content ? `    <content type="html">${content}</content>` : ''}
   </entry>`;
   }).join('\n');
 
+  // XSL styling script for browser rendering (rss.style)
+  const styleScript = `<script src="https://www.rss.style/js/atom-style.js" xmlns="http://www.w3.org/1999/xhtml"></script>`;
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
+  ${styleScript}
   <id>${feedUrl}</id>
   <title>${escapeXml(config.title)}</title>
   <subtitle>${escapeXml(config.description)}</subtitle>
+  <icon>${FEED_LOGO_SVG}</icon>
+  <logo>${FEED_LOGO_SVG}</logo>
   <link href="${feedUrl}" rel="self" type="application/atom+xml"/>
-  <link href="${FEED_BASE_URL}" rel="alternate" type="text/html"/>
+  <link href="${baseUrl}/" rel="alternate" type="text/html"/>
   <updated>${now}</updated>
   <generator>RSS Aggregator (Cloudflare Workers)</generator>
 ${entriesXml}
 </feed>`;
 }
 
-function generateRSS(config: FeedConfig, items: EntryWithFeed[]): string {
+function generateRSS(
+  config: FeedConfig, 
+  items: EntryWithFeed[], 
+  baseUrl: string,
+  feedType: string
+): string {
   const now = new Date().toUTCString();
-  const feedUrl = `${FEED_BASE_URL}${config.path}`;
+  const feedUrl = `${baseUrl}/${feedType}.rss`;
   
   const itemsXml = items.map(item => {
     const pubDate = item.published ? new Date(item.published).toUTCString() : now;
@@ -145,13 +171,22 @@ ${categoriesXml ? categoriesXml + '\n' : ''}      <description>${description}</d
     </item>`;
   }).join('\n');
 
+  // XSL styling script for browser rendering (rss.style)
+  const styleScript = `<script src="https://www.rss.style/js/rss-style.js" xmlns="http://www.w3.org/1999/xhtml"></script>`;
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  ${styleScript}
   <channel>
     <title>${escapeXml(config.title)}</title>
     <description>${escapeXml(config.description)}</description>
-    <link>${FEED_BASE_URL}</link>
+    <link>${baseUrl}/</link>
     <atom:link href="${feedUrl}" rel="self" type="application/rss+xml"/>
+    <image>
+      <url>${FEED_LOGO_SVG}</url>
+      <title>${escapeXml(config.title)}</title>
+      <link>${baseUrl}/</link>
+    </image>
     <lastBuildDate>${now}</lastBuildDate>
     <generator>RSS Aggregator (Cloudflare Workers)</generator>
 ${itemsXml}
