@@ -1,5 +1,5 @@
 // Feed Fetcher - handles fetching and parsing RSS feeds
-import { Env, Feed, FeedFetchMessage, ParsedFeedItem } from './types';
+import { Env, Feed, FeedFetchMessage, ParsedFeedItem, isSponsored } from './types';
 import { parseFeed } from './parser';
 
 const USER_AGENT = 'RSSAggregator/1.0 (Cloudflare Workers; +https://github.com/rss-aggregator)';
@@ -163,7 +163,10 @@ async function storeEntries(
 ): Promise<number> {
   let newCount = 0;
   
-  for (const item of items) {
+  // Filter out sponsored content before storing
+  const filteredItems = items.filter(item => !isSponsored(item));
+  
+  for (const item of filteredItems) {
     try {
       // Use INSERT OR IGNORE to skip duplicates
       const result = await db.prepare(`
