@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Wrangler local state
+.wrangler/
+
+# Generated files
+scripts/import.sql
+
+# Data files (not distributed - see README for data format)
+feeds.csv
+top100.csv
+
+# Environment and secrets
+.env
+.env.*
+.dev.vars
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build output
+dist/

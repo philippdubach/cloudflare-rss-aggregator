@@ -1,0 +1,39 @@
+name = "rss-aggregator"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Enable Smart Placement for better D1 performance
+[placement]
+mode = "smart"
+
+# Cron trigger - every 15 minutes
+[triggers]
+crons = ["*/15 * * * *"]
+
+# D1 Database for storing feed entries
+[[d1_databases]]
+binding = "DB"
+database_name = "rss-aggregator-db"
+database_id = "YOUR_D1_DATABASE_ID"  # Run: npx wrangler d1 create rss-aggregator-db
+
+# KV namespace for caching ETags and metadata
+[[kv_namespaces]]
+binding = "CACHE"
+id = "YOUR_KV_NAMESPACE_ID"  # Run: npx wrangler kv:namespace create CACHE
+
+# Queue for reliable feed processing
+[[queues.producers]]
+queue = "rss-feed-queue"
+binding = "FEED_QUEUE"
+
+[[queues.consumers]]
+queue = "rss-feed-queue"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+max_concurrency = 5
+
+[vars]
+ITEMS_PER_FEED = "50"
+RETENTION_DAYS = "30"
+# ADMIN_TOKEN should be set via: wrangler secret put ADMIN_TOKEN
