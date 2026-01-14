@@ -2,7 +2,7 @@
 import { Env, Feed, FeedFetchMessage, ParsedFeedItem, isSponsored } from './types';
 import { parseFeed } from './parser';
 
-const USER_AGENT = 'RSSAggregator/1.0 (Cloudflare Workers; +https://github.com/rss-aggregator)';
+const USER_AGENT = 'RSSAggregator/1.0 (Cloudflare Workers; +https://rss-aggregator.philippd.workers.dev/)';
 
 // SSRF protection: validate URLs before fetching
 function isValidFeedUrl(url: string): boolean {
